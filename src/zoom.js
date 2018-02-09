@@ -1,7 +1,7 @@
 import {dispatch} from "d3-dispatch";
-import {dragDisable, dragEnable} from "d3-drag";
+// import {dragDisable, dragEnable} from "d3-drag";
 import {interpolateZoom} from "d3-interpolate";
-import {event, customEvent, select, mouse, touch} from "d3-selection";
+import {event, customEvent, select, mouse} from "d3-selection";
 import {interrupt} from "d3-transition";
 import constant from "./constant";
 import ZoomEvent from "./event";
@@ -71,12 +71,12 @@ export default function() {
     selection
         .property("__zoom", defaultTransform)
         .on("wheel.zoom", wheeled)
-        .on("mousedown.zoom", mousedowned)
+        // .on("mousedown.zoom", mousedowned)
         .on("dblclick.zoom", dblclicked)
       .filter(touchable)
-        .on("touchstart.zoom", touchstarted)
-        .on("touchmove.zoom", touchmoved)
-        .on("touchend.zoom touchcancel.zoom", touchended)
+        .on("pointerdown.zoom", pointerdowned)
+        .on("pointermove.zoom", pointermoved)
+        .on("pointerup.zoom pointercancel.zoom", pointerended)
         .style("touch-action", "none")
         .style("-webkit-tap-highlight-color", "rgba(0,0,0,0)");
   }
@@ -242,11 +242,14 @@ export default function() {
       g.mouse = [p, t.invert(p)];
       interrupt(this);
       g.start();
-    }
+	}
+	
+	let transform = constrain(translate(scale(t, k), g.mouse[0], g.mouse[1]), g.extent, translateExtent);
+	console.log(t,k, g.mouse, transform);
 
     noevent();
     g.wheel = setTimeout(wheelidled, wheelDelay);
-    g.zoom("mouse", constrain(translate(scale(t, k), g.mouse[0], g.mouse[1]), g.extent, translateExtent));
+    g.zoom("mouse", transform);
 
     function wheelidled() {
       g.wheel = null;
@@ -254,36 +257,37 @@ export default function() {
     }
   }
 
-  function mousedowned() {
-    if (touchending || !filter.apply(this, arguments)) return;
-    var g = gesture(this, arguments),
-        v = select(event.view).on("mousemove.zoom", mousemoved, true).on("mouseup.zoom", mouseupped, true),
-        p = mouse(this),
-        x0 = event.clientX,
-        y0 = event.clientY;
+  // function mousedowned() {
+  //   if (!filter.apply(this, arguments)) return;
+  //   // if (touchending || !filter.apply(this, arguments)) return;
+  //   var g = gesture(this, arguments),
+  //       v = select(event.view).on("mousemove.zoom", mousemoved, true).on("mouseup.zoom", mouseupped, true),
+  //       p = mouse(this),
+  //       x0 = event.clientX,
+  //       y0 = event.clientY;
 
-    dragDisable(event.view);
-    nopropagation();
-    g.mouse = [p, this.__zoom.invert(p)];
-    interrupt(this);
-    g.start();
+  //   dragDisable(event.view);
+  //   nopropagation();
+  //   g.mouse = [p, this.__zoom.invert(p)];
+  //   interrupt(this);
+  //   g.start();
 
-    function mousemoved() {
-      noevent();
-      if (!g.moved) {
-        var dx = event.clientX - x0, dy = event.clientY - y0;
-        g.moved = dx * dx + dy * dy > clickDistance2;
-      }
-      g.zoom("mouse", constrain(translate(g.that.__zoom, g.mouse[0] = mouse(g.that), g.mouse[1]), g.extent, translateExtent));
-    }
+  //   function mousemoved() {
+  //     noevent();
+  //     if (!g.moved) {
+  //       var dx = event.clientX - x0, dy = event.clientY - y0;
+  //       g.moved = dx * dx + dy * dy > clickDistance2;
+  //     }
+  //     g.zoom("mouse", constrain(translate(g.that.__zoom, g.mouse[0] = mouse(g.that), g.mouse[1]), g.extent, translateExtent));
+  //   }
 
-    function mouseupped() {
-      v.on("mousemove.zoom mouseup.zoom", null);
-      dragEnable(event.view, g.moved);
-      noevent();
-      g.end();
-    }
-  }
+  //   function mouseupped() {
+  //     v.on("mousemove.zoom mouseup.zoom", null);
+  //     dragEnable(event.view, g.moved);
+  //     noevent();
+  //     g.end();
+  //   }
+  // }
 
   function dblclicked() {
     if (!filter.apply(this, arguments)) return;
@@ -298,20 +302,32 @@ export default function() {
     else select(this).call(zoom.transform, t1);
   }
 
-  function touchstarted() {
+  function pointerdowned() {
     if (!filter.apply(this, arguments)) return;
     var g = gesture(this, arguments),
-        touches = event.changedTouches,
+        // touches = event.changedTouches,
         started,
-        n = touches.length, i, t, p;
+        // n = touches.length, 
+        // i,
+        //  t,
+         p;
 
+        
     nopropagation();
-    for (i = 0; i < n; ++i) {
-      t = touches[i], p = touch(this, touches, t.identifier);
-      p = [p, this.__zoom.invert(p), t.identifier];
-      if (!g.touch0) g.touch0 = p, started = true;
-      else if (!g.touch1) g.touch1 = p;
-    }
+    
+    
+    p = mouse(this);
+    // console.log('pointerdown - p', p);
+    p = [p, this.__zoom.invert(p), event.pointerId];
+    if (!g.touch0) g.touch0 = p, started = true;
+    else if (!g.touch1) g.touch1 = p;
+
+    // for (i = 0; i < n; ++i) {
+    //   t = touches[i], p = touch(this, touches, t.identifier);
+    //   p = [p, this.__zoom.invert(p), t.identifier];
+    //   if (!g.touch0) g.touch0 = p, started = true;
+    //   else if (!g.touch1) g.touch1 = p;
+    // }
 
     // If this is a dbltap, reroute to the (optional) dblclick.zoom handler.
     if (touchstarting) {
@@ -331,18 +347,26 @@ export default function() {
     }
   }
 
-  function touchmoved() {
+  function pointermoved() {
+    // console.log('zoom - pointermoved');
     var g = gesture(this, arguments),
-        touches = event.changedTouches,
-        n = touches.length, i, t, p, l;
+        // touches = event.changedTouches,
+        // n = touches.length, 
+        // i, 
+        t,
+        p, l;
 
     noevent();
     if (touchstarting) touchstarting = clearTimeout(touchstarting);
-    for (i = 0; i < n; ++i) {
-      t = touches[i], p = touch(this, touches, t.identifier);
-      if (g.touch0 && g.touch0[2] === t.identifier) g.touch0[0] = p;
-      else if (g.touch1 && g.touch1[2] === t.identifier) g.touch1[0] = p;
-    }
+
+    p = mouse(this);
+    if (g.touch0 && g.touch0[2] === event.pointerId) g.touch0[0] = p;
+    else if (g.touch1 && g.touch1[2] === event.pointerId) g.touch1[0] = p;
+    // for (i = 0; i < n; ++i) {
+    //   t = touches[i], p = touch(this, touches, t.identifier);
+    //   if (g.touch0 && g.touch0[2] === t.identifier) g.touch0[0] = p;
+    //   else if (g.touch1 && g.touch1[2] === t.identifier) g.touch1[0] = p;
+    // }
     t = g.that.__zoom;
     if (g.touch1) {
       var p0 = g.touch0[0], l0 = g.touch0[1],
@@ -358,19 +382,22 @@ export default function() {
     g.zoom("touch", constrain(translate(t, p, l), g.extent, translateExtent));
   }
 
-  function touchended() {
-    var g = gesture(this, arguments),
-        touches = event.changedTouches,
-        n = touches.length, i, t;
+  function pointerended() {
+    var g = gesture(this, arguments);
+    //,
+        // touches = event.changedTouches,
+        // n = touches.length, 
+        // i, t;
 
     nopropagation();
     if (touchending) clearTimeout(touchending);
     touchending = setTimeout(function() { touchending = null; }, touchDelay);
-    for (i = 0; i < n; ++i) {
-      t = touches[i];
-      if (g.touch0 && g.touch0[2] === t.identifier) delete g.touch0;
-      else if (g.touch1 && g.touch1[2] === t.identifier) delete g.touch1;
-    }
+
+    // for (i = 0; i < n; ++i) {
+      // t = touches[i];
+      if (g.touch0 && g.touch0[2] === event.pointerId) delete g.touch0;
+      else if (g.touch1 && g.touch1[2] === event.pointerId) delete g.touch1;
+    // }
     if (g.touch1 && !g.touch0) g.touch0 = g.touch1, delete g.touch1;
     if (g.touch0) g.touch0[1] = this.__zoom.invert(g.touch0[0]);
     else g.end();
