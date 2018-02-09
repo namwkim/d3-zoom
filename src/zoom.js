@@ -245,7 +245,6 @@ export default function() {
 	}
 	
 	let transform = constrain(translate(scale(t, k), g.mouse[0], g.mouse[1]), g.extent, translateExtent);
-	console.log(t,k, g.mouse, transform);
 
     noevent();
     g.wheel = setTimeout(wheelidled, wheelDelay);
